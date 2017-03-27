@@ -98,7 +98,7 @@ func runCreateClientCert(cmd *cobra.Command, args []string) error {
 
 	return errors.Wrap(security.RunCreateClientCert(baseCfg.SSLCA, baseCfg.SSLCAKey,
 		baseCfg.SSLCert, baseCfg.SSLCertKey, keySize, args[0]),
-		"failed to generate clent certificate",
+		"failed to generate client certificate",
 	)
 }
 
@@ -119,7 +119,7 @@ func runListCerts(cmd *cobra.Command, args []string) error {
 		return usageAndError(cmd)
 	}
 	cm := security.NewCertificateManager(baseCfg.SSLCertsDir)
-	return errors.Wrap(cm.Reload(), "failed to generate clent certificate")
+	return errors.Wrap(cm.Reload(), "problem reloading certs directory")
 }
 
 var certCmds = []*cobra.Command{
