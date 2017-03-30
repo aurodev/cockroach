@@ -140,7 +140,7 @@ func (cl *CertificateLoader) Load() error {
 	fileInfos, err := assetLoaderImpl.ReadDir(cl.certsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// File does not exist. We allow some certs without keys.
+			// Directory does not exist.
 			return nil
 		}
 		return err

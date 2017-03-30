@@ -55,6 +55,9 @@ func RestrictedCopy(t testing.TB, path, tempdir, name string) string {
 func AssetReadDir(name string) ([]os.FileInfo, error) {
 	names, err := AssetDir(name)
 	if err != nil {
+		if strings.HasSuffix(err.Error(), "not found") {
+			return nil, os.ErrNotExist
+		}
 		return nil, err
 	}
 	infos := make([]os.FileInfo, len(names), len(names))

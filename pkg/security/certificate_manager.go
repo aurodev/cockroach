@@ -88,7 +88,7 @@ func (cm *CertificateManager) ClientCerts() map[string]*CertInfo {
 func (cm *CertificateManager) LoadCertificates() error {
 	cl := NewCertificateLoader(cm.certsDir)
 	if err := cl.Load(); err != nil {
-		return errors.Wrap(err, "problem loading certs directory")
+		return errors.Errorf("problem loading certs directory %s", cm.certsDir)
 	}
 
 	log.Infof(context.Background(), "Found certificate: %+v", cl.Certificates())
