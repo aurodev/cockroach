@@ -110,7 +110,7 @@ func runCreateClientCert(cmd *cobra.Command, args []string) error {
 // in the cert directory under <username>.crt and key under <username>.key.
 var listCertsCmd = &cobra.Command{
 	Use:   "list",
-	Short: "list certs in --cert-dir",
+	Short: "list certs in --certs-dir",
 	Long: `
 List certificates and keys found in the certificate directory.
 `,
@@ -134,16 +134,20 @@ func runListCerts(cmd *cobra.Command, args []string) error {
 	table.SetAutoFormatHeaders(false)
 	table.SetAutoWrapText(false)
 	table.SetHeader([]string{"Usage", "Certificate File", "Key File", "Notes"})
+
 	if ca := cm.CACert(); ca != nil {
 		table.Append([]string{ca.FileUsage.String(), ca.Filename, ca.KeyFilename})
 	}
+
 	if node := cm.NodeCert(); node != nil {
 		table.Append([]string{node.FileUsage.String(), node.Filename, node.KeyFilename})
 	}
+
 	for name, cert := range cm.ClientCerts() {
 		table.Append([]string{cert.FileUsage.String(), cert.Filename, cert.KeyFilename,
 			fmt.Sprintf("user=%s", name)})
 	}
+
 	table.Render()
 
 	return nil
