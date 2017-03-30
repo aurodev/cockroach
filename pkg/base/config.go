@@ -73,6 +73,12 @@ type lazyHTTPClient struct {
 	err        error
 }
 
+type lazyCertificateManager struct {
+	once sync.Once
+	cm   *security.CertificateManager
+	err  error
+}
+
 // Config is embedded by server.Config. A base config is not meant to be used
 // directly, but embedding configs should call cfg.InitDefaults().
 type Config struct {
@@ -86,6 +92,9 @@ type Config struct {
 	SSLCert     string // Client/server certificate
 	SSLCertKey  string // Client/server key
 	SSLCertsDir string // Directory containing certs/keys.
+
+	// The certificate manager. Must be accessed through GetCertificateManager.
+	certificateManager lazyCertificateManager
 
 	// User running this process. It could be the user under which
 	// the server is running or the user passed in client calls.
@@ -207,6 +216,15 @@ func (cfg *Config) PGURL(user *url.Userinfo) (*url.URL, error) {
 	}, nil
 }
 
+// GetCertificateManager returns the certificate manager, initializing it
+// on the first call.
+func (cfg *Config) GetCertificateManager() (*security.CertificateManager, error) {
+	cfg.certificateManager.once.Do(func() {
+		cfg.certificateManager.cm, cfg.certificateManager.err = security.NewCertificateManager(cfg.SSLCertsDir)
+	})
+	return cfg.certificateManager.cm, cfg.certificateManager.err
+}
+
 // GetClientTLSConfig returns the client TLS config, initializing it if needed.
 // If Insecure is true, return a nil config, otherwise load a config based
 // on the SSLCert file. If SSLCert is empty, use a very permissive config.
@@ -215,6 +233,10 @@ func (cfg *Config) GetClientTLSConfig() (*tls.Config, error) {
 	// Early out.
 	if cfg.Insecure {
 		return nil, nil
+	}
+
+	if _, err := cfg.GetCertificateManager(); err != nil {
+		return nil, err
 	}
 
 	cfg.clientTLSConfig.once.Do(func() {
@@ -235,6 +257,10 @@ func (cfg *Config) GetServerTLSConfig() (*tls.Config, error) {
 	// Early out.
 	if cfg.Insecure {
 		return nil, nil
+	}
+
+	if _, err := cfg.GetCertificateManager(); err != nil {
+		return nil, err
 	}
 
 	cfg.serverTLSConfig.once.Do(func() {

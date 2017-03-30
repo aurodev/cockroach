@@ -17,143 +17,91 @@
 package security
 
 import (
-	"context"
-	"io/ioutil"
-	"os"
-	"path"
-	"strings"
+	"sync"
 
-	"github.com/cockroachdb/cockroach/pkg/util/log"
 	"github.com/pkg/errors"
 )
 
-//go:generate stringer -type=pemType
+type ProcessRole uint32
 
 type CertificateManager struct {
-	certDir string
+	// Immutable fields after object construction.
+	certsDir string
+
+	// mu protects all remaining fields.
+	mu sync.RWMutex
+
+	// If false, this is the first load. Needed to ensure we do not drop certain certs.
+	initialized bool
+	// Set of certs. These are swapped in during Load(), and never mutated afterwards.
+	caCert      *CertInfo
+	nodeCert    *CertInfo
+	clientCerts map[string]*CertInfo
 }
 
-type pemType uint32
-type pemUsage uint32
-
-const (
-	_ pemType = iota
-	certPem
-	keyPem
-
-	_ pemUsage = iota
-	caPem
-	nodePem
-	clientPem
-
-	// Maximum allowable permissions.
-	maxKeyPermissions os.FileMode = 0700
-)
-
-// certFile describe a certificate file and optional key file.
-type pemFile struct {
-	filename  string
-	fileType  pemType
-	fileUsage pemUsage
-
-	// the name is the blob in the middle of the filename. eg: username for client certs.
-	name string
-
-	// blank if none found or loaded.
-	keyFilename string
+// NewCertificateManager creates a new certificate manager.
+func NewCertificateManager(certsDir string) (*CertificateManager, error) {
+	cm := &CertificateManager{certsDir: certsDir}
+	return cm, cm.LoadCertificates()
 }
 
-func exceedsPermissions(objectMode, allowedMode os.FileMode) bool {
-	mask := os.FileMode(0777) ^ allowedMode
-	return mask&objectMode != 0
+// CACert returns the CA cert. May be nil.
+func (cm *CertificateManager) CACert() *CertInfo {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.caCert
 }
 
-func (c *CertificateManager) validateCertDir() error {
-	info, err := os.Stat(c.certDir)
-	if err != nil {
-		return err
+// NodeCert returns the Node cert. May be nil.
+func (cm *CertificateManager) NodeCert() *CertInfo {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.nodeCert
+}
+
+// ClientCerts returns the Client certs.
+func (cm *CertificateManager) ClientCerts() map[string]*CertInfo {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return cm.clientCerts
+}
+
+// LoadCertificates creates a CertificateLoader to load all certs and keys.
+func (cm *CertificateManager) LoadCertificates() error {
+	cl := NewCertificateLoader(cm.certsDir)
+	if err := cl.Load(); err != nil {
+		return errors.Wrap(err, "problem loading certs directory")
 	}
 
-	if !info.IsDir() {
-		return errors.Errorf("%s is not a directory", c.certDir)
+	var caCert, nodeCert *CertInfo
+	clientCerts := make(map[string]*CertInfo)
+	for _, ci := range cl.Certificates() {
+		switch ci.FileUsage {
+		case caPem:
+			caCert = ci
+		case nodePem:
+			nodeCert = ci
+		case clientPem:
+			clientCerts[ci.Name] = ci
+		}
 	}
+
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.initialized {
+		if cm.caCert != nil && caCert == nil {
+			return errors.New("aborting Load(), CA certificate has disappeared")
+		}
+		if cm.nodeCert != nil && nodeCert == nil {
+			return errors.New("aborting Load(), node certificate has disappeared")
+		}
+		// TODO(mberhault): should we check client certs?
+	}
+
+	// Swap everything.
+	cm.caCert = caCert
+	cm.nodeCert = nodeCert
+	cm.clientCerts = clientCerts
 
 	return nil
 }
-
-func (c *CertificateManager) Reload() error {
-	if err := c.validateCertDir(); err != nil {
-		return err
-	}
-
-	fileInfos, err := ioutil.ReadDir(c.certDir)
-	if err != nil {
-		return err
-	}
-
-	for _, info := range fileInfos {
-		filename := info.Name()
-		fullPath := path.Join(c.certDir, filename)
-		if info.IsDir() {
-			if log.V(3) {
-				log.Infof(context.Background(), "skipping sub-directory %s", fullPath)
-			}
-			continue
-		}
-
-		pf, err := pemFileFromName(filename)
-		if err != nil {
-			log.Warningf(context.Background(), "bad filename %s: %v", filename, err)
-			continue
-		}
-		log.Infof(context.Background(), "found %+v", pf)
-	}
-
-	return nil
-}
-
-func pemFileFromName(filename string) (pemFile, error) {
-	parts := strings.Split(filename, `.`)
-	numParts := len(parts)
-
-	if numParts < 2 {
-		return pemFile{}, errors.New("not enough parts found")
-	}
-
-	var pu pemUsage
-	prefix := parts[1]
-	switch parts[0] {
-	case `ca`:
-		pu = caPem
-	case `node`:
-		pu = nodePem
-	case `client`:
-		pu = clientPem
-	default:
-		return pemFile{}, errors.Errorf("unknown prefix %q", prefix)
-	}
-
-	var pt pemType
-	suffix := parts[numParts-1]
-	switch parts[numParts-1] {
-	case `cert`, `crt`:
-		pt = certPem
-	case `key`:
-		pt = keyPem
-	default:
-		return pemFile{}, errors.Errorf("unknown suffix %q", suffix)
-	}
-
-	name := strings.Join(parts[1:numParts-1], `.`)
-
-	return pemFile{filename: filename, fileType: pt, fileUsage: pu, name: name}, nil
-}
-
-func NewCertificateManager(certDirectory string) *CertificateManager {
-	return &CertificateManager{certDir: certDirectory}
-}
-
-//		if exceedsPermissions(filePerm, maxKeyPermissions) {
-//			return nil, errors.Errorf("private key file has permissions %s, cannot be more than %s",
-//				filePerm, maxKeyPermissions)
-//		}

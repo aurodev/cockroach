@@ -31,6 +31,7 @@ import (
 // EmbeddedCertsDir folder and makes the tls package load from there.
 func ResetTest() {
 	security.SetReadFileFn(securitytest.Asset)
+	security.SetAssetLoader(securitytest.EmbeddedAssets)
 }
 
 func TestMain(m *testing.M) {
