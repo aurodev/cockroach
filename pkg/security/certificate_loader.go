@@ -17,12 +17,12 @@
 package security
 
 import (
-	"context"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/net/context"
 
 	"github.com/cockroachdb/cockroach/pkg/util/envutil"
 	"github.com/cockroachdb/cockroach/pkg/util/log"
@@ -126,6 +126,7 @@ type CertificateLoader struct {
 	certificates         []*CertInfo
 }
 
+// Certificates returns the loaded certificates.
 func (cl *CertificateLoader) Certificates() []*CertInfo {
 	return cl.certificates
 }
@@ -135,7 +136,7 @@ func NewCertificateLoader(certsDir string) *CertificateLoader {
 	return &CertificateLoader{
 		certsDir:             certsDir,
 		skipPermissionChecks: envutil.EnvOrDefaultBool("COCKROACH_SKIP_KEY_PERMISSION_CHECK", false),
-		certificates:         make([]*CertInfo, 0, 0),
+		certificates:         make([]*CertInfo, 0),
 	}
 }
 
@@ -155,7 +156,7 @@ func (cl *CertificateLoader) Load() error {
 	// Walk the directory contents.
 	for _, info := range fileInfos {
 		filename := info.Name()
-		fullPath := path.Join(cl.certsDir, filename)
+		fullPath := filepath.Join(cl.certsDir, filename)
 
 		if info.IsDir() {
 			// Skip subdirectories.

@@ -60,7 +60,7 @@ func AssetReadDir(name string) ([]os.FileInfo, error) {
 		}
 		return nil, err
 	}
-	infos := make([]os.FileInfo, len(names), len(names))
+	infos := make([]os.FileInfo, len(names))
 	for i, n := range names {
 		info, err := AssetInfo(filepath.Join(name, n))
 		if err != nil {
@@ -88,5 +88,5 @@ func AssetStat(name string) (os.FileInfo, error) {
 var EmbeddedAssets = security.AssetLoader{
 	ReadDir:  AssetReadDir,
 	ReadFile: Asset,
-	Stat:     AssetInfo,
+	Stat:     AssetStat,
 }

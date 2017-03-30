@@ -108,10 +108,12 @@ func runCreateClientCert(cmd *cobra.Command, args []string) error {
 
 // A listCerts command generates a client certificate and stores it
 // in the cert directory under <username>.crt and key under <username>.key.
+// TODO(marc): rename once certificate_manager is being used.
 var listCertsCmd = &cobra.Command{
-	Use:   "list",
-	Short: "list certs in --certs-dir",
+	Use:   "debug-list",
+	Short: "DEBUG ONLY: list certs in --certs-dir",
 	Long: `
+DEBUG ONLY: the certificates listed here are not yet effective.
 List certificates and keys found in the certificate directory.
 `,
 	RunE: MaybeDecorateGRPCError(runListCerts),

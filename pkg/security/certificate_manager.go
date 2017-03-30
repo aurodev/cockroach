@@ -17,11 +17,12 @@
 package security
 
 import (
-	"context"
 	"crypto/tls"
-	"sync"
+
+	"golang.org/x/net/context"
 
 	"github.com/cockroachdb/cockroach/pkg/util/log"
+	"github.com/cockroachdb/cockroach/pkg/util/syncutil"
 
 	"github.com/pkg/errors"
 )
@@ -38,7 +39,7 @@ type CertificateManager struct {
 	certsDir string
 
 	// mu protects all remaining fields.
-	mu sync.RWMutex
+	mu syncutil.RWMutex
 
 	// If false, this is the first load. Needed to ensure we do not drop certain certs.
 	initialized bool
@@ -174,11 +175,11 @@ func (cm *CertificateManager) GetClientTLSConfig(user string) (*tls.Config, erro
 		ci = cm.nodeCert
 	} else {
 		// Other clients.
-		if clientCi, ok := cm.clientCerts[user]; !ok {
+		clientCi, ok := cm.clientCerts[user]
+		if !ok {
 			return nil, errors.Errorf("no client certificate found for user %s", user)
-		} else {
-			ci = clientCi
 		}
+		ci = clientCi
 	}
 
 	if cm.caCert == nil {
