@@ -66,7 +66,7 @@ func makeTestConfig() Config {
 	cfg.Insecure = false
 
 	// Load test certs. In addition, the tests requiring certs
-	// need to call security.SetReadFileFn(securitytest.Asset)
+	// need to call security.SetAssetLoader(securitytest.EmbeddedAssets)
 	// in their init to mock out the file system calls for calls to AssetFS,
 	// which has the test certs compiled in. Typically this is done
 	// once per package, in main_test.go.

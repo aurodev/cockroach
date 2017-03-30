@@ -34,7 +34,6 @@ import (
 func TestGenerateCerts(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	// Do not mock cert access for this test.
-	security.ResetReadFileFn()
 	security.ResetAssetLoader()
 	defer ResetTest()
 
@@ -95,7 +94,6 @@ func TestGenerateCerts(t *testing.T) {
 func TestUseCerts(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	// Do not mock cert access for this test.
-	security.ResetReadFileFn()
 	security.ResetAssetLoader()
 	defer ResetTest()
 	certsDir, err := ioutil.TempDir("", "certs_test")

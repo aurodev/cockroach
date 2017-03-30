@@ -27,7 +27,6 @@ import (
 )
 
 func init() {
-	security.SetReadFileFn(securitytest.Asset)
 	security.SetAssetLoader(securitytest.EmbeddedAssets)
 }
 
