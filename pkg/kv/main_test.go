@@ -32,6 +32,7 @@ import (
 
 func init() {
 	security.SetReadFileFn(securitytest.Asset)
+	security.SetAssetLoader(securitytest.EmbeddedAssets)
 }
 
 func TestForbiddenDeps(t *testing.T) {

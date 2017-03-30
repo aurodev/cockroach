@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/cockroachdb/cockroach/pkg/cli/cliflags"
 	"github.com/cockroachdb/cockroach/pkg/security"
 	"github.com/cockroachdb/cockroach/pkg/util/retry"
@@ -60,12 +58,6 @@ const (
 	// DefaultCertsDirectory is the default value for the cert directory flag.
 	DefaultCertsDirectory = "cockroach-certs"
 )
-
-type lazyTLSConfig struct {
-	once      sync.Once
-	tlsConfig *tls.Config
-	err       error
-}
 
 type lazyHTTPClient struct {
 	once       sync.Once
@@ -115,12 +107,6 @@ type Config struct {
 	//
 	// See https://github.com/grpc/grpc-go/issues/586.
 	HTTPAddr string
-
-	// clientTLSConfig is the loaded client TLS config. It is initialized lazily.
-	clientTLSConfig lazyTLSConfig
-
-	// serverTLSConfig is the loaded server TLS config. It is initialized lazily.
-	serverTLSConfig lazyTLSConfig
 
 	// httpClient uses the client TLS config. It is initialized lazily.
 	httpClient lazyHTTPClient
@@ -235,19 +221,12 @@ func (cfg *Config) GetClientTLSConfig() (*tls.Config, error) {
 		return nil, nil
 	}
 
-	if _, err := cfg.GetCertificateManager(); err != nil {
+	cm, err := cfg.GetCertificateManager()
+	if err != nil {
 		return nil, err
 	}
 
-	cfg.clientTLSConfig.once.Do(func() {
-		cfg.clientTLSConfig.tlsConfig, cfg.clientTLSConfig.err = security.LoadClientTLSConfig(
-			cfg.SSLCA, cfg.SSLCert, cfg.SSLCertKey)
-		if cfg.clientTLSConfig.err != nil {
-			cfg.clientTLSConfig.err = errors.Errorf("error setting up client TLS config: %s", cfg.clientTLSConfig.err)
-		}
-	})
-
-	return cfg.clientTLSConfig.tlsConfig, cfg.clientTLSConfig.err
+	return cm.GetClientTLSConfig(cfg.User)
 }
 
 // GetServerTLSConfig returns the server TLS config, initializing it if needed.
@@ -259,24 +238,12 @@ func (cfg *Config) GetServerTLSConfig() (*tls.Config, error) {
 		return nil, nil
 	}
 
-	if _, err := cfg.GetCertificateManager(); err != nil {
+	cm, err := cfg.GetCertificateManager()
+	if err != nil {
 		return nil, err
 	}
 
-	cfg.serverTLSConfig.once.Do(func() {
-		if cfg.SSLCert != "" {
-			cfg.serverTLSConfig.tlsConfig, cfg.serverTLSConfig.err = security.LoadServerTLSConfig(
-				cfg.SSLCA, cfg.SSLCert, cfg.SSLCertKey)
-			if cfg.serverTLSConfig.err != nil {
-				cfg.serverTLSConfig.err = errors.Errorf("error setting up server TLS config: %s", cfg.serverTLSConfig.err)
-			}
-		} else {
-			cfg.serverTLSConfig.err = errors.Errorf("--%s=false, but --%s is empty. Certificates must be specified.",
-				cliflags.Insecure.Name, cliflags.Cert.Name)
-		}
-	})
-
-	return cfg.serverTLSConfig.tlsConfig, cfg.serverTLSConfig.err
+	return cm.GetServerTLSConfig()
 }
 
 // GetHTTPClient returns the http client, initializing it

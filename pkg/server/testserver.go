@@ -73,6 +73,7 @@ func makeTestConfig() Config {
 	cfg.SSLCA = filepath.Join(security.EmbeddedCertsDir, security.EmbeddedCACert)
 	cfg.SSLCert = filepath.Join(security.EmbeddedCertsDir, security.EmbeddedNodeCert)
 	cfg.SSLCertKey = filepath.Join(security.EmbeddedCertsDir, security.EmbeddedNodeKey)
+	cfg.SSLCertsDir = security.EmbeddedCertsDir
 
 	// Addr defaults to localhost with port set at time of call to
 	// Start() to an available port. May be overridden later (as in
@@ -126,6 +127,9 @@ func makeTestConfigFromParams(params base.TestServerArgs) Config {
 	}
 	if params.SSLCertKey != "" {
 		cfg.SSLCertKey = params.SSLCertKey
+	}
+	if params.SSLCertsDir != "" {
+		cfg.SSLCertsDir = params.SSLCertsDir
 	}
 	if params.TimeSeriesQueryWorkerMax != 0 {
 		cfg.TimeSeriesServerConfig.QueryWorkerMax = params.TimeSeriesQueryWorkerMax

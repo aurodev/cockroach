@@ -35,10 +35,10 @@ const (
 	EmbeddedCAKey        = "ca.key"
 	EmbeddedNodeCert     = "node.crt"
 	EmbeddedNodeKey      = "node.key"
-	EmbeddedRootCert     = "root.crt"
-	EmbeddedRootKey      = "root.key"
-	EmbeddedTestUserCert = "testuser.crt"
-	EmbeddedTestUserKey  = "testuser.key"
+	EmbeddedRootCert     = "client.root.crt"
+	EmbeddedRootKey      = "client.root.key"
+	EmbeddedTestUserCert = "client.testuser.crt"
+	EmbeddedTestUserKey  = "client.testuser.key"
 )
 
 // readFileFn is used to mock out file system access during tests.

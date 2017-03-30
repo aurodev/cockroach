@@ -26,7 +26,7 @@ import (
 func TestLoadEmbeddedCerts(t *testing.T) {
 	defer leaktest.AfterTest(t)()
 	cl := security.NewCertificateLoader("test_certs")
-	if err := cl.Reload(); err != nil {
+	if err := cl.Load(); err != nil {
 		t.Error(err)
 	}
 }

@@ -18,7 +18,6 @@ package security
 
 import (
 	"context"
-	"crypto/tls"
 	"io/ioutil"
 	"os"
 	"path"
@@ -86,15 +85,23 @@ func (p pemUsage) String() string {
 // CertInfo describe a certificate file and optional key file.
 // To obtain the full path, Filename and KeyFilename must be joined
 // with the certs directory.
+// The key may not be present if this is a CA certificate.
 type CertInfo struct {
-	Filename  string
+	// FileUsage describes the use of this certificate.
 	FileUsage pemUsage
 
-	// the name is the blob in the middle of the filename. eg: username for client certs.
-	Name string
+	// Filename is the base filename of the certificate.
+	Filename string
+	// FileContents is the raw cert file data.
+	FileContents []byte
 
-	// blank if none found.
+	// KeyFilename is the base filename of the key, blank if not found (CA certs only).
 	KeyFilename string
+	// KeyFileContents is the raw key file data.
+	KeyFileContents []byte
+
+	// Name is the blob in the middle of the filename. eg: username for client certs.
+	Name string
 }
 
 func exceedsPermissions(objectMode, allowedMode os.FileMode) bool {
@@ -132,6 +139,10 @@ func NewCertificateLoader(certsDir string) *CertificateLoader {
 func (cl *CertificateLoader) Load() error {
 	fileInfos, err := assetLoaderImpl.ReadDir(cl.certsDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// File does not exist. We allow some certs without keys.
+			return nil
+		}
 		return err
 	}
 
@@ -153,7 +164,7 @@ func (cl *CertificateLoader) Load() error {
 		}
 
 		// Build the info struct from the filename.
-		ci, err := certInfoFromFilename(filename)
+		ci, err := cl.certInfoFromFilename(filename)
 		if err != nil {
 			log.Warningf(context.Background(), "bad filename %s: %v", fullPath, err)
 			continue
@@ -173,7 +184,7 @@ func (cl *CertificateLoader) Load() error {
 
 // certInfoFromFilename takes a filename and attempts to determine the
 // certificate usage (ca, node, etc..).
-func certInfoFromFilename(filename string) (*CertInfo, error) {
+func (cl *CertificateLoader) certInfoFromFilename(filename string) (*CertInfo, error) {
 	parts := strings.Split(filename, `.`)
 	numParts := len(parts)
 
@@ -197,7 +208,19 @@ func certInfoFromFilename(filename string) (*CertInfo, error) {
 	// strip prefix and suffix and re-join middle parts.
 	name := strings.Join(parts[1:numParts-1], `.`)
 
-	return &CertInfo{Filename: filename, FileUsage: pu, Name: name}, nil
+	// Read cert file contents.
+	fullCertPath := filepath.Join(cl.certsDir, filename)
+	certPEMBlock, err := assetLoaderImpl.ReadFile(fullCertPath)
+	if err != nil {
+		return nil, errors.Errorf("could not read certificate file: %v", err)
+	}
+
+	return &CertInfo{
+		FileUsage:    pu,
+		Filename:     filename,
+		FileContents: certPEMBlock,
+		Name:         name,
+	}, nil
 }
 
 // findKey takes a CertInfo and looks for the corresponding key file.
@@ -209,8 +232,8 @@ func (cl *CertificateLoader) findKey(ci *CertInfo) error {
 	// Stat the file. This follows symlinks.
 	info, err := assetLoaderImpl.Stat(fullKeyPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// File does not exist. We allow some certs without keys.
+		if os.IsNotExist(err) && ci.FileUsage == caPem {
+			// This is a CA cert with no key: not an error.
 			return nil
 		}
 		return errors.Errorf("could not stat key file %s: %v", fullKeyPath, err)
@@ -231,23 +254,13 @@ func (cl *CertificateLoader) findKey(ci *CertInfo) error {
 		}
 	}
 
-	// Load files and make sure they really are a pair.
-	fullCertPath := filepath.Join(cl.certsDir, ci.Filename)
-	certPEMBlock, err := assetLoaderImpl.ReadFile(fullCertPath)
-	if err != nil {
-		return errors.Errorf("could not read certificate file %s: %v", fullCertPath, err)
-	}
-
+	// Read key file.
 	keyPEMBlock, err := assetLoaderImpl.ReadFile(fullKeyPath)
 	if err != nil {
 		return errors.Errorf("could not read key file %s: %v", fullKeyPath, err)
 	}
 
-	if _, err := tls.X509KeyPair(certPEMBlock, keyPEMBlock); err != nil {
-		return errors.Errorf("error loading x509 key pair {%s,%s}: %v",
-			fullCertPath, fullKeyPath, err)
-	}
-
 	ci.KeyFilename = keyFilename
+	ci.KeyFileContents = keyPEMBlock
 	return nil
 }
